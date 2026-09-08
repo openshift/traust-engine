@@ -1826,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "traust-engine"
-version = "0.12.3"
+version = "0.12.7"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
