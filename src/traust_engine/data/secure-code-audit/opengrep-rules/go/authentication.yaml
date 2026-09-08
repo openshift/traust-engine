@@ -1,0 +1,57 @@
+# CWE-290: forward-without-strip identity header passthrough in reverse proxies.
+rules:
+  - id: traust-go-authentication-forwarded-identity-passthrough
+    languages: [go]
+    severity: ERROR
+    message: >-
+      Inbound identity headers reach the upstream request without being
+      stripped — X-Forwarded-(Access-Token|Email|User|Preferred-Username)
+      are trust assertions the upstream derives identity from, so a client
+      that sets them spoofs an authenticated principal through the proxy.
+      Delete the inbound identity headers before proxying and re-add only
+      values the proxy itself authenticated. CWE-290.
+    metadata:
+      cwe: ["CWE-290"]
+      category: authentication
+      asvs: ["V3"]
+      confidence: MEDIUM
+      references:
+        - "CWE-290 authentication bypass — X-Forwarded-* identity headers forwarded without stripping"
+    patterns:
+      - pattern-either:
+          # inbound header bag copied wholesale onto the upstream request
+          - patterns:
+              - pattern-either:
+                  - pattern: $OUT.Header = $R.Header
+                  - pattern: $OUT.Header = $R.Header.Clone()
+              - metavariable-regex:
+                  metavariable: $R
+                  regex: ^(r|req|request|inReq|inRequest|incoming)$
+          # identity header explicitly forwarded from the inbound request
+          - patterns:
+              - pattern-either:
+                  - pattern: $OUT.Header.Set($H, $R.Header.Get($H2))
+                  - pattern: $OUT.Header.Add($H, $R.Header.Get($H2))
+              - metavariable-regex:
+                  metavariable: $H2
+                  regex: (?i)^"x-forwarded-(access-token|email|user|preferred-username)"$
+          # reverse proxy constructed in a file that traffics in identity
+          # headers but never deletes ANY header — the vulnerable code is
+          # an absence (no strip before proxying), so the constraint is
+          # file-level co-occurrence
+          - patterns:
+              - pattern-either:
+                  - pattern: httputil.NewSingleHostReverseProxy($T)
+                  - pattern: wsutil.NewSingleHostReverseProxy($T)
+              - pattern-inside:
+                  pattern-regex: (?s)\A(?=.*(?i:x-forwarded-(access-token|email|user|preferred-username)))(?!.*(?i:header\.del)).*
+      # sanitizers: an identity-header strip precedes the forward in the
+      # same block (direct Del, or the range-over-header-list idiom)
+      - pattern-not-inside: |
+          $T.Header.Del($DH)
+          ...
+      - pattern-not-inside: |
+          for $I, $HN := range $HDRS {
+            $T.Header.Del($HN)
+          }
+          ...

@@ -1,0 +1,70 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "traust-engine"
+version = "0.12.6"
+license = "Apache-2.0"
+description = "Processing core for the AI security harness: scanners, data management, analysis, format handlers"
+requires-python = ">=3.11"
+dependencies = [
+    "traust-contracts>=1.0.0,<2",
+    "traust-ledger>=0.21.0",
+    "jsonschema>=4.0",
+    "referencing",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+graph = [
+    "tree-sitter",
+    "tree-sitter-go",
+    "tree-sitter-python",
+    "tree-sitter-typescript",
+    "tree-sitter-javascript",
+]
+signing = ["sigstore>=4.0,<5.0"]
+# Object-store locations for ANALYSIS_RESULTS_URI / PORTFOLIO_GRAPH_URI.
+# Optional on purpose: a local path or file:// imports none of this, so an
+# operator workstation acquires no dependency for a deployment feature.
+# Install the driver for the store you use alongside it (s3fs, gcsfs, adlfs).
+remote = ["fsspec>=2024.2"]
+s3 = ["fsspec>=2024.2", "s3fs>=2024.2"]
+gcs = ["fsspec>=2024.2", "gcsfs>=2024.2"]
+
+[dependency-groups]
+dev = ["pytest>=9.1.1", "ruff>=0.6", "vulture>=2.16"]
+
+[tool.uv.sources]
+traust-contracts = { git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-contracts.git", tag = "v1.2.0" }
+traust-ledger = { git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-ledger.git", tag = "v0.21.0" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/traust_engine"]
+
+[tool.hatch.build.targets.sdist]
+exclude = ["/.ci-venv", "/.venv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests requiring external binaries (gitleaks, opengrep) on PATH",
+    "requires_git: test creates git repos in tmp dirs (skipped when git init is blocked)",
+    "unbound_safe_exec: skip autouse profile bind; assert fallback or explicit profile_map",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["src/traust_engine/data/secure-code-audit"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM", "PTH", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "E741", "E402", "E501", "RUF012"]
+"src/traust_engine/reporting/lint.py" = ["E501"]
+"src/traust_engine/metrics/history.py" = ["E501"]
+"src/traust_engine/reporting/validate.py" = ["E402"]

@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+# commit-msg hook — validate conventional commit subject
+set -euo pipefail
+exec python3 "$(git rev-parse --show-toplevel)/ci/gates.py" subject "${1:?message file required}"

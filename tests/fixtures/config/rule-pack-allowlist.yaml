@@ -1,0 +1,24 @@
+packs:
+  argus-observe-rules:
+    enabled: true
+    source: https://github.com/smith-xyz/argus-observe-rules@2a94aebee9a26a7e0325582330c4eed232b984fb
+    rules:
+      - go-tls-bypass
+      - go-crypto-certificate-validation
+      - go-http-client-tls-override
+      - python-certificate-validation-override
+      - python-tls-bypass
+      - python-http-client-tls-override
+      - python-crypto-certificate-validation
+      - go-crypto-cipher-modes
+      - javascript-tls-bypass
+      - typescript-tls-bypass
+      - go-certificate-validation-override
+      - javascript-crypto-certificate-validation
+      - java-tls-bypass
+      - javascript-http-client-tls-override
+      - typescript-http-client-tls-override
+    held_back:
+      - rule: go-crypto-tls-version
+        held: 2026-08-07
+        readmit_when: measured precision at or above gate

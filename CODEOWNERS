@@ -1,0 +1,20 @@
+# Reviewer routing — pair with the forge's branch protection:
+#   (owners are the @openshift/traust-maintainers team; adjust to your fork)
+#   - Require CODEOWNERS approval on main
+#   - Require pipeline success before merge
+#
+
+# Adapters (scanner integrations)
+/src/traust_engine/adapters/ @openshift/traust-maintainers
+
+# Disposition ledger and corpus resolution
+/src/traust_engine/corpus/ @openshift/traust-maintainers
+
+# Finding identity (traust-ledger) and report integrity validation
+/src/traust_engine/_util/finding_identity.py @openshift/traust-maintainers
+/src/traust_engine/_util/safe_exec.py @openshift/traust-maintainers
+/src/traust_engine/metrics/history.py @openshift/traust-maintainers
+/src/traust_engine/reporting/validate.py @openshift/traust-maintainers
+/tests/test_validate_report.py @openshift/traust-maintainers
+
+* @openshift/traust-maintainers

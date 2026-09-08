@@ -1,0 +1,41 @@
+version: 1
+profiles:
+  validation-step:
+    description: Validation adapter host steps.
+    allow: [curl, oc, kubectl, jq, grep, base64, head, tail, tr, wc, cat, sleep, echo, printf]
+    allow_pipelines: true
+    keep_env: [KUBECONFIG, VF_OAUTH_TOKEN]
+  go-fuzz:
+    description: Go fuzz build steps.
+    allow: [go, make, gofmt, git]
+    allow_pipelines: false
+    keep_env: [GOPATH, GOCACHE, GOMODCACHE, GOFLAGS]
+  java-build:
+    description: Maven/Gradle build steps.
+    allow: [mvn, gradle, java, javac, jar, make, git]
+    allowed_path_heads: ["./gradlew", "./mvnw"]
+    allow_pipelines: false
+    keep_env: [JAVA_HOME]
+  python-test:
+    description: Python test execution.
+    allow: [python3, pytest, make, git]
+    allow_pipelines: false
+    keep_env: [VIRTUAL_ENV]
+  node-build:
+    description: Node build/test steps.
+    allow: [npm, npx, node, make, git]
+    allow_pipelines: false
+  rust-fuzz:
+    description: Rust fuzz build steps.
+    allow: [cargo, rustc, make, git]
+    allow_pipelines: false
+    keep_env: [CARGO_HOME, RUSTUP_HOME]
+  go-scan:
+    description: govulncheck reachability scans.
+    allow: [govulncheck]
+    allow_pipelines: false
+    keep_env: [GOPATH, GOCACHE, GOMODCACHE, GOFLAGS, GOPROXY, GONOSUMDB, GONOSUMCHECK, GOSUMDB]
+  generic-build:
+    description: Make-only fallback.
+    allow: [make, git]
+    allow_pipelines: false
