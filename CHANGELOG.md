@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.12.7] — 2026-09-08
+
+### Fixed
+- `tests/test_redact.py` assembles the PEM private-key markers at runtime
+  instead of carrying a literal `-----BEGIN RSA PRIVATE KEY-----` block that
+  tripped the public forge's secret-scanning "RSA private key" detector
+  (openshift/traust-engine alert #1). The body was the dummy string
+  `MIIsecretsecret`, never key material; test behaviour unchanged.
+
 ## [0.12.6] — 2026-09-08
 
 ### Added
