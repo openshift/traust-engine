@@ -1,0 +1,29 @@
+budget_policy:
+  version: 1
+  approved: 1970-01-01
+  enforcement: observe
+  units: output_tokens
+  monthly_budget:
+    usd_central: 10000
+    usd_band_low: 8000
+    usd_band_high: 12000
+  per_run_defaults:
+    secure-code-audit: 2500000
+    triage: 1500000
+    verify-remediation: 800000
+    remediate-finding: 1500000
+    default: 1000000
+  per_batch_default: 12000000
+  per_day_campaign: 150000000
+  bands:
+    - at: 1.5
+      action: warn
+    - at: 2.0
+      action: degrade
+    - at: 3.0
+      action: refuse
+  estimate_required: batch
+  override:
+    flag: --budget-override
+    requires_reason: true
+    ledger_source: budget-override

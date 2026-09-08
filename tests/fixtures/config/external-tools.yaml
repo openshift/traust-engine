@@ -1,0 +1,76 @@
+tools:
+  - name: opengrep
+    version_cmd: ["opengrep", "--version"]
+    upstream: {kind: github, ref: opengrep/opengrep}
+    expected: "1.25.0"
+    consumers: [secure-code-audit, vuln-scan]
+
+  - name: gitleaks
+    version_cmd: ["gitleaks", "version"]
+    upstream: {kind: github, ref: gitleaks/gitleaks}
+    expected: "8.30.1"
+    consumers: [secure-code-audit, vuln-scan, dependency-watch]
+
+  - name: syft
+    version_cmd: ["syft", "--version"]
+    upstream: {kind: github, ref: anchore/syft}
+    expected: "1.48.0"
+    consumers: [secure-container-audit, secure-code-audit]
+
+  - name: grype
+    version_cmd: ["grype", "--version"]
+    upstream: {kind: github, ref: anchore/grype}
+    expected: "0.115.0"
+    consumers: [secure-container-audit, secure-code-audit]
+
+  - name: osv-scanner
+    version_cmd: ["osv-scanner", "--version"]
+    upstream: {kind: github, ref: google/osv-scanner}
+    expected: "2.4.0"
+    consumers: [secure-rpm-audit, secure-code-audit, vuln-scan, dependency-watch]
+
+  - name: cosign
+    version_cmd: ["cosign", "version"]
+    upstream: {kind: github, ref: sigstore/cosign}
+    expected: "3.1.1"
+    consumers: [secure-container-audit, ledger-signing]
+    signing_policy:
+      transparency_log: forbidden
+
+  - name: skopeo
+    version_cmd: ["skopeo", "--version"]
+    upstream: {kind: github, ref: containers/skopeo}
+    expected: "1.23.0"
+    consumers: [inventory-repositories, secure-container-audit]
+
+  - name: yara
+    version_cmd: ["yara", "--version"]
+    upstream: {kind: github, ref: VirusTotal/yara}
+    expected: "4.5.8"
+    consumers: [secure-container-audit, secure-rpm-audit]
+
+  - name: govulncheck
+    version_cmd: ["govulncheck", "-version"]
+    version_regex: 'govulncheck@v(\d+)\.(\d+)\.(\d+)'
+    upstream: {kind: goproxy, ref: golang.org/x/vuln}
+    expected: "1.6.0"
+    consumers: [secure-code-audit, secure-rpm-audit, triage]
+
+  - name: go
+    version_cmd: ["go", "version"]
+    version_regex: 'go version go(\d+)\.(\d+)\.(\d+)'
+    expected: "1.24.0"
+    consumers: [secure-code-audit, secure-rpm-audit, triage]
+
+  - name: pip-audit
+    version_cmd: ["pip-audit", "--version"]
+    upstream: {kind: pypi, ref: pip-audit}
+    expected: "2.10.1"
+    consumers: [secure-code-audit]
+
+  - name: joern
+    version_cmd: ["joern", "--version"]
+    version_regex: 'Version:\s*(\d+)\.(\d+)\.(\d+)'
+    upstream: {kind: github, ref: joernio/joern}
+    expected: "4.0.600"
+    consumers: [impact-analysis, secure-rpm-audit]

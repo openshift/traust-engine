@@ -1,0 +1,50 @@
+rules:
+  - id: internal-host
+    tier: block
+    why: internal hostname
+    pattern: '\b[a-z0-9][a-z0-9.-]*\.(?:corp|internal)\.yourorg\.invalid\b'
+
+  - id: kerberos-realm
+    tier: block
+    why: Kerberos realm
+    pattern: '(?-i:\b[A-Z0-9.-]+\.YOURORG\.INVALID\b)'
+
+  - id: vault-path
+    tier: block
+    why: secret-store path
+    pattern: '\byourorg-secrets/[A-Za-z0-9/_-]+\b'
+
+  - id: internal-gitlab
+    tier: review
+    why: internal forge host
+    pattern: 'gitlab\.internal\.yourorg\.invalid'
+
+  - id: org-email
+    tier: review
+    why: organization email
+    pattern: '\b[A-Za-z0-9._%+-]+@yourorg\.invalid\b'
+
+  - id: jira-internal
+    tier: review
+    why: internal tracker key
+    pattern: '\b(?:YOURPROJ|YOURSEC)-\d+\b'
+
+  - id: internal-tooling
+    tier: review
+    why: internal tooling vocabulary
+    pattern: '\b(?:yourorg-build-tool|yourorg-deploy-tool)\b'
+
+  - id: campaign
+    tier: review
+    why: campaign codename
+    pattern: '\b(?:Yourorg-Campaign|ProjectYourorgCampaign)\b'
+
+  - id: org-public
+    tier: note
+    why: public endpoint
+    pattern: '\b(?:docs|www)\.yourorg\.invalid\b'
+
+  - id: org-product
+    tier: note
+    why: product vocabulary
+    pattern: '\b(?:YourorgProduct|YourorgSuite)\b'

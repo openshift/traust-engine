@@ -1,0 +1,88 @@
+version: 1
+updated: "2026-07-24"
+
+tiers:
+  mythos-class:
+    description: frontier reasoning
+  opus-class:
+    description: strong general reasoning
+  sonnet-class:
+    description: fast mechanical judgment
+  haiku-class:
+    description: cheapest routing and extraction
+
+providers:
+  anthropic:
+    data_handling: approved
+    models:
+      claude-mythos-5: {tier: mythos-class, batch_eligible: true, price_per_mtok_in: 10.0, price_per_mtok_out: 50.0}
+      claude-fable-5: {tier: mythos-class, batch_eligible: true, price_per_mtok_in: 10.0, price_per_mtok_out: 50.0}
+      claude-opus-5: {tier: opus-class, batch_eligible: true, price_per_mtok_in: 5.0, price_per_mtok_out: 25.0}
+      claude-opus-4-8: {tier: opus-class, batch_eligible: true, price_per_mtok_in: 5.0, price_per_mtok_out: 25.0}
+      claude-opus-4-6: {tier: opus-class, batch_eligible: true, price_per_mtok_in: 5.0, price_per_mtok_out: 25.0}
+      claude-sonnet-5: {tier: sonnet-class, batch_eligible: true, price_per_mtok_in: 3.0, price_per_mtok_out: 15.0}
+      claude-haiku-4-5-20251001: {tier: haiku-class, batch_eligible: true, price_per_mtok_in: 1.0, price_per_mtok_out: 5.0}
+
+roles:
+  deep-audit:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: true
+  threat-model:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  triage-verifier:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: true
+  fact-judge:
+    floor: sonnet-class
+    approved: [claude-sonnet-5, claude-opus-4-8, claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  patch-author:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  patch-reviewer:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  validation-planner:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: true
+  remediation:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  verification-verdict:
+    floor: mythos-class
+    approved: [claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: true
+  fuzz-author:
+    floor: opus-class
+    approved: [claude-opus-4-8, claude-mythos-5]
+    candidates: []
+    ledger_validity_writer: false
+  render-narrate:
+    floor: haiku-class
+    approved: [claude-haiku-4-5-20251001, claude-sonnet-5, claude-opus-4-8]
+    candidates: []
+    ledger_validity_writer: false
+
+escalation:
+  triggers:
+    - dual-pass disagreement
+    - citation-gate failure on first-pass output
+    - finding severity >= high proposed by a sub-floor tier
+    - judge flip detected by the consistency monitors

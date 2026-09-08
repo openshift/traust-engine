@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# pre-commit hook — fast lint on staged .py files only.
+# Bypass: git commit --no-verify
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "pre-commit: uv not found — install uv, then run: make setup" >&2
+  exit 1
+fi
+
+staged_py="$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.py$' || true)"
+if [ -z "$staged_py" ]; then
+  exit 0
+fi
+
+uv run ruff check $staged_py
+uv run ruff format --check $staged_py

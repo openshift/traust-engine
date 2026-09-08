@@ -1,0 +1,52 @@
+version: 1
+
+sources:
+  epss:
+    tier: cached
+    mode: file
+    summary: FIRST EPSS daily exploit-prediction scores.
+    url: https://epss.cyentia.com/epss_scores-current.csv.gz
+    file: epss_scores-current.csv.gz
+    max_age_hours: 24
+    cadence: daily
+    license:
+      id: free-commercial-with-attribution
+      url: https://www.first.org/epss/faq
+
+  kev:
+    tier: cached
+    mode: file
+    summary: CISA Known Exploited Vulnerabilities catalog.
+    url: https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json
+    file: known_exploited_vulnerabilities.json
+    max_age_hours: 24
+    cadence: daily
+    license:
+      id: CC0-1.0
+      url: https://www.cisa.gov/sites/default/files/licenses/kev/license.txt
+
+  osv:
+    tier: live
+    summary: OSV.dev advisory transport.
+    url_template: https://api.osv.dev/v1/query
+    method: POST
+    ident: package
+    probe:
+      ident: lodash
+      ecosystem: npm
+      expect_status: 200
+    license:
+      id: pass-through
+      url: https://osv.dev/
+
+  nvd:
+    tier: live
+    summary: NVD CVE API 2.0.
+    url_template: https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={ident_upper}
+    ident: cve
+    probe:
+      ident: CVE-2021-44228
+      expect_status: 200
+    license:
+      id: public-domain-with-attribution-request
+      url: https://nvd.nist.gov/developers/terms-of-use
