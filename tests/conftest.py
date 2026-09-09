@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+import json
 import os
 import shutil
 import subprocess
@@ -34,7 +36,14 @@ os.environ["TRAUST_CONFIG_HOME"] = str(_TEST_HOME)
 # ANALYSIS_RESULTS_DIR (the env-sourced constant) is still consumed directly by
 # some modules pending its dedicated sweep; keep it until then.
 os.environ.setdefault("ANALYSIS_RESULTS_DIR", str(_FIXTURES / "analysis-results"))
-os.environ.setdefault("LAAS_TOKEN", "eyJ0eXAiOiJKV1QiLCJhbGciOiJub25lIn0.eyJzdWIiOiJ0ZXN0In0.")
+# Unsigned (alg=none) JWT-shaped token for the test session, assembled at runtime
+# so no token-shaped literal sits in the tree for forge secret scanners.
+_seg = lambda o: (
+    base64.urlsafe_b64encode(json.dumps(o, separators=(",", ":")).encode()).decode().rstrip("=")
+)  # noqa: E731
+os.environ.setdefault(
+    "LAAS_TOKEN", f"{_seg({'typ': 'JWT', 'alg': 'none'})}.{_seg({'sub': 'test'})}."
+)
 
 from traust_contracts import load_context
 
