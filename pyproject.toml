@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "traust-engine"
-version = "0.12.8"
+version = "0.12.9"
 license = "Apache-2.0"
 description = "Processing core for the AI security harness: scanners, data management, analysis, format handlers"
 requires-python = ">=3.11"
@@ -37,8 +37,8 @@ gcs = ["fsspec>=2024.2", "gcsfs>=2024.2"]
 dev = ["pytest>=9.1.1", "ruff>=0.6", "vulture>=2.16"]
 
 [tool.uv.sources]
-traust-contracts = { git = "https://github.com/openshift/traust-contracts.git", rev = "04840f0ff852df59e1e83ac4a392b6d05a1f2ff6" }
-traust-ledger = { git = "https://github.com/openshift/traust-ledger.git", rev = "0f4553f21f6ad20e551cf4457927c957acc927ae" }
+traust-contracts = { git = "https://github.com/openshift/traust-contracts.git", tag = "v1.2.2" }
+traust-ledger = { git = "https://github.com/openshift/traust-ledger.git", tag = "v0.21.6" }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/traust_engine"]
