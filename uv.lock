@@ -1816,8 +1816,8 @@ wheels = [
 
 [[package]]
 name = "traust-contracts"
-version = "1.2.0"
-source = { git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-contracts.git?tag=v1.2.0#6ad98b12a31abbd79b739bd0bdb85e2f5fe504cd" }
+version = "1.2.2"
+source = { git = "https://github.com/openshift/traust-contracts.git?rev=04840f0ff852df59e1e83ac4a392b6d05a1f2ff6#04840f0ff852df59e1e83ac4a392b6d05a1f2ff6" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
@@ -1826,7 +1826,7 @@ dependencies = [
 
 [[package]]
 name = "traust-engine"
-version = "0.12.7"
+version = "0.12.8"
 source = { editable = "." }
 dependencies = [
     { name = "jsonschema" },
@@ -1877,8 +1877,8 @@ requires-dist = [
     { name = "referencing" },
     { name = "s3fs", marker = "extra == 's3'", specifier = ">=2024.2" },
     { name = "sigstore", marker = "extra == 'signing'", specifier = ">=4.0,<5.0" },
-    { name = "traust-contracts", git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-contracts.git?tag=v1.2.0" },
-    { name = "traust-ledger", git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-ledger.git?tag=v0.21.0" },
+    { name = "traust-contracts", git = "https://github.com/openshift/traust-contracts.git?rev=04840f0ff852df59e1e83ac4a392b6d05a1f2ff6" },
+    { name = "traust-ledger", git = "https://github.com/openshift/traust-ledger.git?rev=0f4553f21f6ad20e551cf4457927c957acc927ae" },
     { name = "tree-sitter", marker = "extra == 'graph'" },
     { name = "tree-sitter-go", marker = "extra == 'graph'" },
     { name = "tree-sitter-javascript", marker = "extra == 'graph'" },
@@ -1896,8 +1896,8 @@ dev = [
 
 [[package]]
 name = "traust-ledger"
-version = "0.21.0"
-source = { git = "ssh://git@gitlab.cee.redhat.com/hybrid-platforms-sec/traust-ledger.git?tag=v0.21.0#83c29ef3b6e47385bff07cab357457ce16197198" }
+version = "0.21.5"
+source = { git = "https://github.com/openshift/traust-ledger.git?rev=0f4553f21f6ad20e551cf4457927c957acc927ae#0f4553f21f6ad20e551cf4457927c957acc927ae" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pyjwt", extra = ["crypto"] },
