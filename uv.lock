@@ -1817,7 +1817,7 @@ wheels = [
 [[package]]
 name = "traust-contracts"
 version = "1.2.2"
-source = { git = "https://github.com/openshift/traust-contracts.git?tag=v1.2.2#191a3c1be43a3c9516d9ac783d75591725f7a4a6" }
+source = { git = "https://github.com/openshift/traust-contracts.git?tag=v1.2.2#21b223150925aa5bdd025e39a8f0c1ca250cc00a" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
@@ -1897,7 +1897,7 @@ dev = [
 [[package]]
 name = "traust-ledger"
 version = "0.21.6"
-source = { git = "https://github.com/openshift/traust-ledger.git?tag=v0.21.6#bc13f4b944f46deb68ea9dbbf8980eb9d6af055f" }
+source = { git = "https://github.com/openshift/traust-ledger.git?tag=v0.21.6#e953dbca352f1bd8f66fe7bac7661853690c396e" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pyjwt", extra = ["crypto"] },
