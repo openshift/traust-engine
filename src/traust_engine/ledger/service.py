@@ -20,6 +20,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from traust_contracts.v1.models.layer import LayerActor
+
 from traust_ledger.api import reports
 from traust_ledger.client import LedgerClient, LedgerError
 
@@ -146,6 +148,36 @@ class LedgerService:
         """Mark a review queue item as resolved."""
         return self._client.resolve(layer_path.stem, key, decision, note)
 
+    def countersign(
+        self,
+        layer_path: Path,
+        finding_ref: str,
+        *,
+        rationale: str,
+        recorded_at: str,
+        decision: str | None = None,
+        severity: str | None = None,
+        actor: LayerActor | None = None,
+    ) -> dict:
+        """Record a human countersign/severity event through the gated SDK handler.
+
+        The SDK runs the human-lane gates, stamps the actor, and signs
+        atomically — the harness never appends or signs events itself.
+        """
+        return self._client.countersign(
+            layer_path.stem,
+            finding_ref,
+            rationale=rationale,
+            recorded_at=recorded_at,
+            decision=decision,
+            severity=severity,
+            actor=actor,
+        )
+
+    def whoami(self) -> LayerActor:
+        """The verified actor for the current token (see LedgerClient.whoami)."""
+        return self._client.whoami()
+
     # ─── Layer file I/O (local filesystem, bypasses Backend) ──────────
 
     def read_layer_file(self, layer_path: Path) -> dict:
@@ -196,6 +228,19 @@ class LedgerService:
         )
         return True
 
+    def stamp_event_identities(
+        self, layer_path: Path, fingerprints: dict[str, str]
+    ) -> int:
+        """Backfill event fingerprints and re-sign atomically via the SDK.
+
+        The skill hands the fingerprint map (finding_ref -> fp) to the ledger,
+        which stamps identity onto the events inside the Merkle tree and re-signs
+        in one atomic write — the skill never writes the layer itself. Returns
+        the number of events stamped.
+        """
+        result = self._client.stamp_event_identities(layer_path.stem, fingerprints)
+        return int(result.get("stamped", 0))
+
     def store_layer(self, layer_path: Path, layer: dict) -> None:
         """Persist a complete layer dict through the backend.
 
@@ -205,7 +250,7 @@ class LedgerService:
             svc.store_layer(layer_path, layer)
             svc.sign(layer_path)          # stamps + signs atomically
         """
-        self._client._backend.store(layer_path, layer)
+        self._client.store(layer_path.stem, layer)
 
     # ─── Utilities ───────────────────────────────────────────────────────
 
