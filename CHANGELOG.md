@@ -2,6 +2,12 @@
 
 All notable changes to traust-engine are documented here.
 
+## [0.2.0]
+
+## Changes
+
+- delegate countersign/whoami/stamp_event_identities to the engine
+
 ## [0.1.1]
 
 ## Changes
