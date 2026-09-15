@@ -12,7 +12,6 @@ _MIGRATED: dict[str, str] = {
     "corpus": "traust_engine.corpus.resolver",
     "finding_identity": "traust_engine._util.finding_identity",
     "metrics_ledger": "traust_engine.metrics.history",
-    "validate_employee": "traust.cli.validate_employee",  # employee verification tool
     "fetch_feeds": "traust.cli.fetch_feeds",
     "check_drift": "traust.cli.check_drift",
     "emit_doc_variance": "traust.cli.emit_doc_variance",
