@@ -2,6 +2,16 @@
 
 All notable changes to traust-engine are documented here.
 
+## [0.2.2]
+
+- Pin traust-contracts v0.3.0 and traust-ledger v0.2.1, carrying the optional
+  `evidence[]` block on remediation reports through to the report validator.
+  No engine logic changes: `reporting/validate.py` validates against the
+  pinned schema, so accepting the block is a consequence of the pin. The
+  existing cross-check tying `summary.status == 'revalidated_fixed'` to
+  `revalidation.fixed` is untouched, since no status depends on `evidence[]`
+  yet.
+
 ## [0.2.0]
 
 ## Changes
