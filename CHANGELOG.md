@@ -2,6 +2,12 @@
 
 All notable changes to traust-engine are documented here.
 
+## [0.2.4]
+
+- Point the traust-contracts and traust-ledger pins at the new
+  `traust-security` GitHub organisation (ledger v0.2.3, which carries the
+  corrected URL inside its own tag).
+
 ## [0.2.3]
 
 - Pin traust-contracts v0.4.0 and traust-ledger v0.2.2, carrying the typed
