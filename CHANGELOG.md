@@ -2,6 +2,14 @@
 
 All notable changes to traust-engine are documented here.
 
+## [0.2.3]
+
+- Pin traust-contracts v0.4.0 and traust-ledger v0.2.2, carrying the typed
+  patch-evidence block on the VERIFICATION family through to the report
+  validator. No engine logic changes: `reporting/validate.py` validates
+  against the pinned schema, so accepting the block on a verification report
+  is a consequence of the pin.
+
 ## [0.2.2]
 
 - Pin traust-contracts v0.3.0 and traust-ledger v0.2.1, carrying the optional
