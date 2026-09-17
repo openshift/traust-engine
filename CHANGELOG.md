@@ -2,6 +2,11 @@
 
 All notable changes to traust-engine are documented here.
 
+## [0.2.5]
+
+- Pin traust-contracts v0.5.0 (evidence projection + postgres storage
+  namespace) and traust-ledger v0.3.0 (stamp + whoami over REST).
+
 ## [0.2.4]
 
 - Point the traust-contracts and traust-ledger pins at the new
