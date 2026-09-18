@@ -96,6 +96,44 @@ def _sql_values(values) -> str:
     return ", ".join(f"'{member.value}'" for member in values)
 
 
+# ---------------------------------------------------------------------------
+# The published column list for v_open and v_hardening.
+#
+# These were `SELECT f.*`, which made the view's shape a side effect of the
+# findings table's DDL: add a column there and every consumer's result shape
+# changed silently. Naming them makes the view a contract — and declaring it
+# once means the two views cannot drift apart.
+#
+# ORDER IS PART OF THE CONTRACT. This is exactly what `f.*` expanded to, so
+# any consumer reading positionally keeps working. Append new columns at the
+# end; never insert or reorder.
+FINDING_VIEW_COLUMNS = (
+    "f.repo_key",
+    "f.finding_id",
+    "f.title",
+    "f.severity",
+    "f.primary_cwe",
+    "f.cwes",
+    "f.cvss_score",
+    "f.cvss_vector",
+    "f.fingerprint",
+    "f.validity",
+    "f.resolution",
+    "f.assurance",
+    "f.validation_status",
+    "f.last_updated",
+    "f.paths",
+    "f.control_refs",
+    "r.tree",
+    "r.ownership",
+    "r.business_unit",
+    "r.label",
+    "r.product",
+    "r.is_branch_audit",
+)
+_VIEW_SELECT = ",\n         ".join(FINDING_VIEW_COLUMNS)
+
+
 SCHEMA = f"""
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
@@ -242,8 +280,7 @@ CREATE TABLE decisions (
 -- separately, per the census/trends convention). The census remains the
 -- authority for headline denominators (see meta.authority).
 CREATE VIEW v_open AS
-  SELECT f.*, r.tree, r.ownership, r.business_unit, r.label, r.product,
-         r.is_branch_audit
+  SELECT {_VIEW_SELECT}
   FROM findings f JOIN repos r USING (repo_key)
   -- Both lists are rendered from the traust-contracts enums (see
   -- CLOSED_RESOLUTIONS / NON_EXPOSURE_VALIDITY above), never typed here.
@@ -257,8 +294,7 @@ CREATE VIEW v_open AS
 
 -- posture debt (hardening class), separated like the dashboards do
 CREATE VIEW v_hardening AS
-  SELECT f.*, r.tree, r.ownership, r.business_unit, r.label, r.product,
-         r.is_branch_audit
+  SELECT {_VIEW_SELECT}
   FROM findings f JOIN repos r USING (repo_key)
   WHERE f.validity = '{Validity.HARDENING.value}';
 

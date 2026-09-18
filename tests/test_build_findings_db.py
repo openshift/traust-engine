@@ -351,3 +351,61 @@ def test_corrected_is_open_exposure(db):
     assert con.execute("SELECT COUNT(*) FROM v_open").fetchone()[0] == before
     con.execute("UPDATE findings SET validity='false_positive' WHERE finding_id='FIND-001'")
     assert con.execute("SELECT COUNT(*) FROM v_open").fetchone()[0] == before - 1
+
+
+# The exact column list v_open/v_hardening published when they were `SELECT f.*`.
+# Order is part of the contract: a positional consumer must keep working.
+# Append here when a column is added; never insert or reorder.
+PUBLISHED_VIEW_COLUMNS = [
+    "repo_key",
+    "finding_id",
+    "title",
+    "severity",
+    "primary_cwe",
+    "cwes",
+    "cvss_score",
+    "cvss_vector",
+    "fingerprint",
+    "validity",
+    "resolution",
+    "assurance",
+    "validation_status",
+    "last_updated",
+    "paths",
+    "control_refs",
+    "tree",
+    "ownership",
+    "business_unit",
+    "label",
+    "product",
+    "is_branch_audit",
+]
+
+
+@pytest.mark.parametrize("view", ["v_open", "v_hardening"])
+def test_views_publish_a_named_stable_column_list(db, view):
+    """`SELECT f.*` made the view's shape a side effect of the findings DDL.
+
+    Adding a column to `findings` silently changed every consumer's result
+    shape. The list is now explicit, so this test is the thing that notices.
+    """
+    con, _ = db
+    got = [row[1] for row in con.execute(f"PRAGMA table_info({view})")]
+    assert got == PUBLISHED_VIEW_COLUMNS
+    assert "SELECT f.*" not in bdb.SCHEMA
+
+
+def test_view_column_list_covers_the_findings_table(db):
+    """A column added to `findings` must be added to the view list too.
+
+    Without this, a new column is simply absent from the views and nobody
+    finds out until a dashboard query returns nothing for it.
+    """
+    con, _ = db
+    table_columns = [row[1] for row in con.execute("PRAGMA table_info(findings)")]
+    published = [c.removeprefix("f.") for c in bdb.FINDING_VIEW_COLUMNS if c.startswith("f.")]
+    assert published == table_columns, (
+        "findings table and FINDING_VIEW_COLUMNS disagree; append the new "
+        "column to FINDING_VIEW_COLUMNS (at the end) and to "
+        "PUBLISHED_VIEW_COLUMNS in this test"
+    )
