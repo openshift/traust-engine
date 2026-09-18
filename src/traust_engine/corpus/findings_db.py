@@ -30,6 +30,7 @@ import sqlite3
 from pathlib import Path
 
 from traust_contracts.config import CorpusConfig
+from traust_contracts.v1.enums import DispositionResolution, Validity
 
 from traust_engine._util import finding_identity as fid
 from traust_engine.assets import harness_version
@@ -46,7 +47,56 @@ try:
 except ImportError:
     HAS_CONTRACTS = False
 
-SCHEMA = """
+# ---------------------------------------------------------------------------
+# Disposition buckets for the views, derived from the contract enums rather
+# than typed into the SQL.
+#
+# Hand-typed values are how v_open once excluded 'in_progress' — a value the
+# enum does not contain ('fix_in_progress' does) — so every in-progress
+# finding silently dropped out of open exposure (docs-verification
+# 2026-07-31 P0-3). Two more dead values, 'withdrawn' and 'refuted', were
+# still in the list when this was written; neither exists in any validity
+# enum, so both filtered nothing.
+#
+# Deriving them means a value renamed upstream raises at import instead of
+# going quietly inert, and the completeness assertion below means a value
+# ADDED upstream stops the build until someone buckets it deliberately.
+CLOSED_RESOLUTIONS = (
+    DispositionResolution.RESOLVED,
+    DispositionResolution.RISK_ACCEPTED,
+)
+# Real and risk-bearing but not open exposure: false positives are not real,
+# and hardening is posture debt tracked separately (v_hardening).
+NON_EXPOSURE_VALIDITY = (
+    Validity.FALSE_POSITIVE,
+    Validity.HARDENING,
+)
+# 'corrected' belongs here: report.schema.json defines it as "finding revised
+# after initial write-up" — a statement about the accuracy of the write-up,
+# not about whether the bug exists. Whether it is fixed is resolution's axis.
+OPEN_EXPOSURE_VALIDITY = (
+    Validity.CONFIRMED,
+    Validity.NOT_VERIFIED,
+    Validity.CORRECTED,
+)
+
+_unbucketed = set(Validity) - set(NON_EXPOSURE_VALIDITY) - set(OPEN_EXPOSURE_VALIDITY)
+if _unbucketed:  # pragma: no cover - fires only when the contract enum grows
+    raise RuntimeError(
+        "findings_db: validity value(s) "
+        f"{sorted(v.value for v in _unbucketed)} are in the contract enum but "
+        "not bucketed as open exposure or non-exposure. Classify them in "
+        "OPEN_EXPOSURE_VALIDITY or NON_EXPOSURE_VALIDITY — leaving them "
+        "unlisted silently counts them as open in v_open."
+    )
+
+
+def _sql_values(values) -> str:
+    """Render enum members as a SQL IN-list. Enum values only, never input."""
+    return ", ".join(f"'{member.value}'" for member in values)
+
+
+SCHEMA = f"""
 CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 
 CREATE TABLE repos (
@@ -187,32 +237,30 @@ CREATE TABLE decisions (
   PRIMARY KEY (register, decision_id)
 );
 
--- open exposure, census-aligned approximation: not resolved, not
--- refuted/false-positive, and NOT hardening (posture debt is tracked
+-- open exposure, census-aligned approximation: not affirmatively closed,
+-- not a false positive, and NOT hardening (posture debt is tracked
 -- separately, per the census/trends convention). The census remains the
 -- authority for headline denominators (see meta.authority).
 CREATE VIEW v_open AS
   SELECT f.*, r.tree, r.ownership, r.business_unit, r.label, r.product,
          r.is_branch_audit
   FROM findings f JOIN repos r USING (repo_key)
-  -- resolution values are contracts/schemas/layer.schema.json's enum. The old
-  -- whitelist said 'in_progress' — a value that does not exist in the
-  -- enum ('fix_in_progress' does), so every in-progress finding
-  -- silently dropped out of v_open (docs-verification 2026-07-31
-  -- P0-3). Now the census's exact convention (build_census.py):
-  -- open = anything not affirmatively closed, so partial fixes and
-  -- regressed findings still count as shipped exposure.
-  WHERE COALESCE(f.resolution, 'open')
-        NOT IN ('resolved', 'risk_accepted')
-    AND COALESCE(f.validity, 'confirmed')
-        NOT IN ('false_positive', 'withdrawn', 'refuted', 'hardening');
+  -- Both lists are rendered from the traust-contracts enums (see
+  -- CLOSED_RESOLUTIONS / NON_EXPOSURE_VALIDITY above), never typed here.
+  -- The census's exact convention (build_census.py): open = anything not
+  -- affirmatively closed, so partial fixes and regressed findings still
+  -- count as shipped exposure.
+  WHERE COALESCE(f.resolution, '{DispositionResolution.OPEN.value}')
+        NOT IN ({_sql_values(CLOSED_RESOLUTIONS)})
+    AND COALESCE(f.validity, '{Validity.CONFIRMED.value}')
+        NOT IN ({_sql_values(NON_EXPOSURE_VALIDITY)});
 
 -- posture debt (hardening class), separated like the dashboards do
 CREATE VIEW v_hardening AS
   SELECT f.*, r.tree, r.ownership, r.business_unit, r.label, r.product,
          r.is_branch_audit
   FROM findings f JOIN repos r USING (repo_key)
-  WHERE f.validity = 'hardening';
+  WHERE f.validity = '{Validity.HARDENING.value}';
 
 -- Lens-2 style distinct exposure over owned HEAD audits
 CREATE VIEW v_distinct_owned AS

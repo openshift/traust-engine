@@ -316,3 +316,38 @@ def test_repo_key_separates_two_report_kinds_for_one_repo(tmp_path):
     kinds = {k for _, k in rows}
     assert len(rows) == len(set(r[0] for r in rows)), rows
     assert kinds == {"code-audit", "cloud-config"}, rows
+
+
+def test_view_filters_are_derived_from_the_contract_enums():
+    """The view SQL must not contain hand-typed disposition values.
+
+    'in_progress' (see test_open_view_counts_fix_in_progress) was one dead
+    value; 'withdrawn' and 'refuted' were two more, sitting in v_open's
+    exclusion list while existing in no validity enum, so they filtered
+    nothing. Rendering the lists from the enums is what stops the next one.
+    """
+    from traust_contracts.v1.enums import Validity
+
+    # The SQL literal form, not the bare word: prose in the comments may
+    # legitimately name a value the filter no longer carries.
+    assert "'withdrawn'" not in bdb.SCHEMA
+    assert "'refuted'" not in bdb.SCHEMA
+    for member in (*bdb.NON_EXPOSURE_VALIDITY, *bdb.CLOSED_RESOLUTIONS):
+        assert f"'{member.value}'" in bdb.SCHEMA, member
+
+    # Every enum member is bucketed, and the two buckets do not overlap.
+    assert set(bdb.OPEN_EXPOSURE_VALIDITY) | set(bdb.NON_EXPOSURE_VALIDITY) == set(Validity)
+    assert not set(bdb.OPEN_EXPOSURE_VALIDITY) & set(bdb.NON_EXPOSURE_VALIDITY)
+
+
+def test_corrected_is_open_exposure(db):
+    """report.schema.json: 'corrected' = "finding revised after initial
+    write-up" — a claim about the write-up's accuracy, not about whether the
+    bug exists. Whether it is fixed is resolution's axis, so corrected stays
+    open. Zero rows carry it today, which is exactly why it needs pinning."""
+    con, _ = db
+    before = con.execute("SELECT COUNT(*) FROM v_open").fetchone()[0]
+    con.execute("UPDATE findings SET validity='corrected' WHERE finding_id='FIND-001'")
+    assert con.execute("SELECT COUNT(*) FROM v_open").fetchone()[0] == before
+    con.execute("UPDATE findings SET validity='false_positive' WHERE finding_id='FIND-001'")
+    assert con.execute("SELECT COUNT(*) FROM v_open").fetchone()[0] == before - 1
