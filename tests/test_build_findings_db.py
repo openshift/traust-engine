@@ -409,3 +409,61 @@ def test_view_column_list_covers_the_findings_table(db):
         "column to FINDING_VIEW_COLUMNS (at the end) and to "
         "PUBLISHED_VIEW_COLUMNS in this test"
     )
+
+
+def test_build_stamps_the_schema_revision(db):
+    con, _ = db
+    row = con.execute("SELECT value FROM meta WHERE key='schema_revision'").fetchone()
+    assert row is not None, "a reader cannot check what the build does not stamp"
+    assert int(row[0]) == bdb.SCHEMA_REVISION
+
+
+def test_reader_refuses_a_database_from_another_revision(db):
+    """build() always writes a fresh file, so this guard is for READERS.
+
+    A dashboard querying a findings.db left over from an older harness would
+    otherwise get a plausible wrong answer -- the views it selects from may
+    not have the columns or the filter semantics it assumes.
+    """
+    con, _ = db
+    assert bdb.check_revision(con) == bdb.SCHEMA_REVISION
+
+    con.execute("UPDATE meta SET value=? WHERE key='schema_revision'", (bdb.SCHEMA_REVISION + 1,))
+    with pytest.raises(bdb.StaleFindingsDb, match="Rebuild it"):
+        bdb.check_revision(con)
+
+
+def test_a_database_predating_the_stamp_reads_as_revision_one(db):
+    """The key arrived with revision 2, so its absence is not 'unknown'."""
+    con, _ = db
+    con.execute("DELETE FROM meta WHERE key='schema_revision'")
+    with pytest.raises(bdb.StaleFindingsDb, match="is revision 1"):
+        bdb.check_revision(con)
+
+
+def test_connect_refuses_and_does_not_leak_the_handle(tmp_path, monkeypatch):
+    stale = tmp_path / "stale.db"
+    con = sqlite3.connect(stale)
+    con.execute("CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT)")
+    con.execute("INSERT INTO meta VALUES ('schema_revision','1')")
+    con.commit()
+    con.close()
+
+    opened = []
+    real_connect = sqlite3.connect
+    monkeypatch.setattr(
+        sqlite3, "connect", lambda *a, **k: opened.append(real_connect(*a, **k)) or opened[-1]
+    )
+    with pytest.raises(bdb.StaleFindingsDb, match="is revision 1"):
+        bdb.connect(stale)
+
+    assert opened, "connect() never opened anything"
+    with pytest.raises(sqlite3.ProgrammingError):
+        opened[-1].execute("SELECT 1")  # closed: refusing must not leak a handle
+
+
+def test_connect_rejects_a_file_that_is_not_a_findings_database(tmp_path):
+    junk = tmp_path / "junk.db"
+    junk.write_bytes(b"not a database at all")
+    with pytest.raises(bdb.StaleFindingsDb, match="not a findings database"):
+        bdb.connect(junk)

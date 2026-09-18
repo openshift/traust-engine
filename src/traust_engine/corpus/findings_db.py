@@ -91,6 +91,53 @@ if _unbucketed:  # pragma: no cover - fires only when the contract enum grows
     )
 
 
+# Bumped whenever the shape this module writes changes in a way a reader can
+# see: a table or view column added/removed/reordered, or a view's meaning
+# changed. build() always writes a fresh file (it unlinks first), so this
+# exists for READERS -- a dashboard querying a findings.db left over from an
+# older harness gets a clear refusal instead of a plausible wrong answer.
+#
+# 1 -> 2: v_open/v_hardening stopped being SELECT f.* and publish an explicit
+#         column list, and their disposition filters are derived from the
+#         contract enums (the dead 'withdrawn'/'refuted' values are gone).
+SCHEMA_REVISION = 2
+
+
+class StaleFindingsDb(RuntimeError):
+    """The database on disk was written by a different schema revision."""
+
+
+def check_revision(con: sqlite3.Connection, *, path: Path | None = None) -> int:
+    """Refuse a findings.db this code did not write the shape of.
+
+    Absent means pre-revision: the key was introduced with revision 2, so a
+    database without it predates the column-list and enum-derivation changes.
+    """
+    where = f" at {path}" if path else ""
+    try:
+        row = con.execute("SELECT value FROM meta WHERE key='schema_revision'").fetchone()
+    except sqlite3.DatabaseError as error:
+        raise StaleFindingsDb(f"not a findings database{where}: {error}") from None
+    found = int(row[0]) if row else 1
+    if found != SCHEMA_REVISION:
+        raise StaleFindingsDb(
+            f"findings database{where} is revision {found}, this harness writes "
+            f"{SCHEMA_REVISION}. Rebuild it: traust corpus findings-db"
+        )
+    return found
+
+
+def connect(db_path: Path) -> sqlite3.Connection:
+    """Open a findings.db for reading, refusing a stale one."""
+    con = sqlite3.connect(str(db_path))
+    try:
+        check_revision(con, path=db_path)
+    except Exception:
+        con.close()
+        raise
+    return con
+
+
 def _sql_values(values) -> str:
     """Render enum members as a SQL IN-list. Enum values only, never input."""
     return ", ".join(f"'{member.value}'" for member in values)
@@ -642,6 +689,7 @@ def build(
     insert_impact(cur, results, counts)
 
     meta = {
+        "schema_revision": str(SCHEMA_REVISION),
         "built_at": datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "harness_version": harness_version() or "",
         "results_root": str(results),
@@ -664,7 +712,7 @@ def query_findings_typed(db_path: Path, where: str = "", params: tuple = ()) -> 
     """Query findings DB and return typed Finding objects."""
     if not HAS_CONTRACTS:
         raise ImportError("traust_contracts required for typed findings")
-    conn = sqlite3.connect(str(db_path))
+    conn = connect(db_path)
     sql = "SELECT * FROM findings"
     if where:
         sql += f" WHERE {where}"
