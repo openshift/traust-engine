@@ -33,6 +33,7 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -76,6 +77,7 @@ class IngestReport:
     rejected: int = 0
     missing: int = 0
     unregistered: dict[str, int] = field(default_factory=dict)
+    subjects: int = 0
     by_family: dict[str, int] = field(default_factory=dict)
     reasons: dict[str, int] = field(default_factory=dict)
     failures: list[tuple[str, str]] = field(default_factory=list)
@@ -129,6 +131,58 @@ def plan(results: Path, cfg: CorpusConfig, trees: list[str] | None = None) -> It
             yield family, scope, subject, results / ref
 
 
+def build_registry(results: Path, cfg: CorpusConfig, trees: list[str] | None = None) -> dict:
+    """A corpus-registry artifact from the resolution.
+
+    Ownership is the denominator every dashboard cut divides by, and it
+    lives in corpus-config plus the inventory -- nowhere in the artifacts
+    themselves. Without this, subject_ownership is empty and
+    v_distinct_owned cannot be computed from storage/v1 at all.
+
+    Unregistered trees are omitted for the same reason they are skipped on
+    ingest: corpus-config is the ownership authority and a tree it does not
+    declare has no denominator.
+    """
+    resolution = corpus.resolve(results, cfg, trees=trees, with_repo_urls=True)
+    subjects = []
+    for record in resolution.records:
+        if record.tree not in cfg.trees:
+            continue
+        meta = cfg.trees[record.tree]
+        subject: dict[str, Any] = {
+            "subject_id": repo_key(record),
+            "tree": record.tree,
+            "ownership": meta.ownership,
+            "business_unit": meta.business_unit,
+            "is_branch_audit": bool(record.is_branch_audit),
+        }
+        for key, value in (
+            ("label", meta.label),
+            ("product", record.product),
+            ("repo_url", record.repo_url),
+            ("ref", record.ref),
+        ):
+            if value:
+                subject[key] = value
+        if record.ref_kind in ("branch", "tag", "default", "stream"):
+            subject["ref_kind"] = record.ref_kind
+        subjects.append(subject)
+    return {
+        "version": 1,
+        "updated": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "subjects": subjects,
+    }
+
+
+def ingest_registry(store: Store, results: Path, cfg: CorpusConfig, trees=None) -> int:
+    """Ingest the registry. Returns the subject count."""
+    document = build_registry(results, cfg, trees)
+    scope = cfg.readable_scopes()[0] if len(cfg.readable_scopes()) == 1 else cfg.scope.id
+    payload = json.dumps(document, ensure_ascii=False, separators=(",", ":")).encode()
+    store.ingest("corpus-registry", payload, Binding(scope_id=scope))
+    return len(document["subjects"])
+
+
 def ingest_tree(
     store: Store,
     results: Path,
@@ -139,6 +193,8 @@ def ingest_tree(
 ) -> IngestReport:
     """Ingest every resolvable artifact. Reports rejections, never hides them."""
     report = IngestReport()
+    if not dry_run:
+        report.subjects = ingest_registry(store, results, cfg, trees)
     for family, scope, subject, path in plan(results, cfg, trees):
         if family == "__unregistered__":
             report.unregistered[scope] = report.unregistered.get(scope, 0) + 1
@@ -176,6 +232,8 @@ def render(report: IngestReport) -> str:
     ]
     for family, count in sorted(report.by_family.items(), key=lambda kv: -kv[1]):
         lines.append(f"  {count:6}  {family}")
+    if report.subjects:
+        lines.append(f"  {report.subjects:6}  subjects registered (ownership)")
     if report.unregistered:
         lines.append(
             "SKIPPED -- tree not declared in corpus-config, so it has no "
