@@ -535,3 +535,55 @@ def test_already_marked_stamps_are_not_recounted(tmp_path, capsys):
 
     fi.run_attribute(tmp_path)
     assert "1 already marked" in capsys.readouterr().out
+
+
+def test_stamp_missing_fills_gaps_and_never_moves_an_existing_stamp():
+    """annotate_report recomputes everything; this fills only the holes."""
+    from traust_engine.ledger import ALGO_VERSION
+
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [
+            _finding("F-1", "a/b.go", "CWE-79", "one"),
+            _finding("F-2", "c/d.go", "CWE-200", "two"),
+        ],
+    }
+    rep["findings"][0]["fingerprint"] = "f" * 64  # a stale v-whatever stamp
+    rep["findings"][0]["fingerprint_algo"] = "v1"
+
+    assert fi.stamp_missing(rep) == 1, "only the unstamped one"
+    assert rep["findings"][0]["fingerprint"] == "f" * 64, "existing stamp untouched"
+    assert rep["findings"][0]["fingerprint_algo"] == "v1", "existing marker untouched"
+    assert len(rep["findings"][1]["fingerprint"]) == 64
+    assert rep["findings"][1]["fingerprint_algo"] == ALGO_VERSION
+    assert fi.stamp_missing(rep) == 0, "idempotent"
+
+
+def test_stamp_missing_pass_is_read_only_by_default(tmp_path, capsys):
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    report = tmp_path / "a-findings-current.json"
+    report.write_text(json.dumps(rep))
+    before = report.read_text()
+
+    assert fi.run_stamp_missing(tmp_path) == 0
+    assert "dry run" in capsys.readouterr().out
+    assert report.read_text() == before
+
+    assert fi.run_stamp_missing(tmp_path, write=True) == 0
+    assert json.loads(report.read_text())["findings"][0]["fingerprint"]
+
+
+def test_stamp_missing_leaves_a_fully_stamped_tree_alone(tmp_path):
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    rep["findings"][0]["fingerprint"] = "f" * 64
+    path = tmp_path / "a-findings-current.json"
+    path.write_text(json.dumps(rep))
+    before = path.read_text()
+    assert fi.run_stamp_missing(tmp_path, write=True) == 0
+    assert path.read_text() == before

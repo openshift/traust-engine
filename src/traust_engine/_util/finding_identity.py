@@ -531,6 +531,57 @@ def repo_candidates(report: dict) -> list[str | None]:
     return [repaired, raw] if repaired != raw else [raw]
 
 
+def stamp_missing(report: dict) -> int:
+    """Stamp findings that have NO fingerprint. Never touches an existing one.
+
+    `annotate_report` recomputes every finding, so on a corpus carrying v1/v2
+    stamps it moves identities -- measured 2026-09-18: 3,555 across 1,498
+    files. Filling only the gaps cannot move anything, because a finding with
+    no stamp has nothing referencing it.
+    """
+    repo = normalize_repository((report.get("metadata") or {}).get("repository"))
+    stamped = 0
+    for finding in report.get("findings") or []:
+        if finding.get("fingerprint"):
+            continue
+        finding["fingerprint"] = fingerprint(finding, repo)
+        finding["fingerprint_algo"] = ALGO_VERSION
+        stamped += 1
+    return stamped
+
+
+def run_stamp_missing(root: Path, *, write: bool = False) -> int:
+    """Fill fingerprint gaps across a tree. Read-only by default."""
+    touched: list[tuple[Path, dict, int]] = []
+    total = 0
+    for path in sorted(
+        {p for g in ("*-security-audit.json", "*-findings-current.json") for p in root.rglob(g)}
+    ):
+        if "_manifest" in path.parts:
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"skip {path}: {error}", file=sys.stderr)
+            continue
+        n = stamp_missing(document)
+        if not n:
+            continue
+        # No neighbour-move check: stamp_missing skips any finding that already
+        # has a fingerprint, so there is no path by which it disturbs one. A
+        # guard here survives every mutation, which means it proves nothing.
+        total += n
+        touched.append((path, document, n))
+    print(f"fingerprint gaps: {total} finding(s) in {len(touched)} file(s)")
+    if not write:
+        print("\ndry run: nothing written. Re-run with --write.")
+        return 0
+    for path, document, _ in touched:
+        _persist_report(path, document)
+    print(f"\nwrote {len(touched)} file(s)")
+    return 0
+
+
 def run_attribute(root: Path, *, write: bool = False) -> int:
     """Attribute every existing stamp to the recipe that minted it.
 
