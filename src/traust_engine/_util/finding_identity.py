@@ -90,6 +90,7 @@ from pathlib import Path
 from traust_engine._util.layer_paths import confine_layer_path
 from traust_engine.ledger import (
     ALGO_VERSION,
+    attribute,
     canon_path,
     fingerprint,
     primary_cwe,
@@ -515,6 +516,94 @@ def run_backfill(root: Path, *, dry_run: bool = False, allow_identity_move: bool
         f"{'updated' if not dry_run else 'would update'}, "
         f"{findings} findings fingerprinted"
     )
+    return 0
+
+
+def repo_candidates(report: dict) -> list[str | None]:
+    """Every spelling of the repository a stamp might have been minted from.
+
+    `metadata.repository` as written AND as repaired: 72 corpus stamps
+    predate normalize_repository stripping autolink brackets, so the raw
+    value is the only thing that reproduces them.
+    """
+    raw = (report.get("metadata") or {}).get("repository")
+    repaired = normalize_repository(raw)
+    return [repaired, raw] if repaired != raw else [raw]
+
+
+def run_attribute(root: Path, *, write: bool = False) -> int:
+    """Attribute every existing stamp to the recipe that minted it.
+
+    Read-only by default. `--write` stamps `fingerprint_algo` where
+    attribution succeeded and leaves the hash untouched -- it records what
+    is already true rather than changing any identity, which is why it is
+    safe in a way a re-stamp is not.
+
+    Unattributable stamps are REPORTED, never guessed. Writing a
+    placeholder version would put a false certainty in the one field whose
+    entire purpose is certainty.
+    """
+    tally: dict[str, int] = {}
+    unattributed: list[tuple[Path, str]] = []
+    already: int = 0
+    to_write: list[tuple[Path, dict, int]] = []
+
+    for path in sorted(root.rglob("*-security-audit.json")) + sorted(
+        root.rglob("*-findings-current.json")
+    ):
+        if "_manifest" in path.parts:
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"skip {path}: {error}", file=sys.stderr)
+            continue
+        candidates = repo_candidates(document)
+        pending = 0
+        for finding in document.get("findings") or []:
+            stamp = finding.get("fingerprint")
+            if not stamp:
+                continue
+            if finding.get("fingerprint_algo"):
+                already += 1
+                continue
+            version = attribute(finding, stamp, candidates)
+            if version is None:
+                tally["unattributed"] = tally.get("unattributed", 0) + 1
+                unattributed.append((path, str(finding.get("id"))))
+                continue
+            tally[version] = tally.get(version, 0) + 1
+            finding["fingerprint_algo"] = version
+            pending += 1
+        if pending:
+            to_write.append((path, document, pending))
+
+    total = sum(tally.values())
+    print(f"attribution over {total} unmarked stamp(s) ({already} already marked):")
+    for version in sorted(tally, key=lambda v: (v == "unattributed", v), reverse=True):
+        share = f"{100 * tally[version] / total:5.2f}%" if total else "    -"
+        print(f"  {tally[version]:7}  ({share})  {version}")
+
+    if unattributed:
+        print(
+            f"\n{len(unattributed)} stamp(s) match no known recipe. Reported, "
+            "not guessed -- a placeholder version would be a false certainty.",
+            file=sys.stderr,
+        )
+        for path, finding_id in unattributed[:10]:
+            print(f"  {path}: {finding_id}", file=sys.stderr)
+        if len(unattributed) > 10:
+            print(f"  (+{len(unattributed) - 10} more)", file=sys.stderr)
+
+    if not write:
+        print(
+            f"\ndry run: {sum(n for _, _, n in to_write)} marker(s) in "
+            f"{len(to_write)} file(s) would be written. Re-run with --write."
+        )
+        return 0
+    for path, document, _ in to_write:
+        _persist_report(path, document)
+    print(f"\nwrote {sum(n for _, _, n in to_write)} marker(s) to {len(to_write)} file(s)")
     return 0
 
 

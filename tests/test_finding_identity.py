@@ -455,3 +455,83 @@ def test_run_fingerprint_only_guards_the_writing_path(tmp_path, capsys):
     assert fi.run_fingerprint(report, write=True) == 1
     assert "orphans that history" in capsys.readouterr().err
     assert report.read_text() == before, "refused write must leave the file alone"
+
+
+def _report_with_stamp(stamp: str, *, repo: str = "https://example.test/repo") -> dict:
+    rep = {
+        "metadata": {"repository": repo},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    rep["findings"][0]["fingerprint"] = stamp
+    return rep
+
+
+def test_repo_candidates_offers_both_the_raw_and_repaired_spelling():
+    """72 corpus stamps were minted from '<https://...>' before
+    normalize_repository stripped the brackets, so the raw value is the only
+    thing that reproduces them."""
+    wrapped = fi.repo_candidates({"metadata": {"repository": "<https://x/y>"}})
+    assert wrapped == ["https://x/y", "<https://x/y>"]
+    # No repair needed: one candidate, not a duplicate pair.
+    assert fi.repo_candidates({"metadata": {"repository": "https://x/y"}}) == ["https://x/y"]
+
+
+def test_attribute_pass_is_read_only_by_default(tmp_path, capsys):
+    from traust_engine.ledger import ALGO_VERSION, fingerprint
+
+    rep = _report_with_stamp("placeholder")
+    rep["findings"][0]["fingerprint"] = fingerprint(
+        rep["findings"][0], rep["metadata"]["repository"]
+    )
+    report = tmp_path / "a-security-audit.json"
+    report.write_text(json.dumps(rep))
+    before = report.read_text()
+
+    assert fi.run_attribute(tmp_path) == 0
+    out = capsys.readouterr().out
+    assert ALGO_VERSION in out and "dry run" in out
+    assert report.read_text() == before, "a dry run must not write"
+
+    assert fi.run_attribute(tmp_path, write=True) == 0
+    assert json.loads(report.read_text())["findings"][0]["fingerprint_algo"] == ALGO_VERSION
+
+
+def test_attribute_never_touches_the_hash(tmp_path):
+    """It records what is already true; it must not change any identity."""
+    from traust_engine.ledger import fingerprint
+
+    rep = _report_with_stamp("placeholder")
+    stamp = fingerprint(rep["findings"][0], rep["metadata"]["repository"])
+    rep["findings"][0]["fingerprint"] = stamp
+    report = tmp_path / "a-security-audit.json"
+    report.write_text(json.dumps(rep))
+
+    fi.run_attribute(tmp_path, write=True)
+    assert json.loads(report.read_text())["findings"][0]["fingerprint"] == stamp
+
+
+def test_unattributable_stamps_are_reported_and_left_unmarked(tmp_path, capsys):
+    """A placeholder version would be a false certainty in the one field
+    whose entire purpose is certainty."""
+    report = tmp_path / "a-security-audit.json"
+    report.write_text(json.dumps(_report_with_stamp("f" * 64)))
+
+    assert fi.run_attribute(tmp_path, write=True) == 0
+    captured = capsys.readouterr()
+    assert "match no known recipe" in captured.err
+    assert "F-1" in captured.err
+    assert "fingerprint_algo" not in report.read_text()
+
+
+def test_already_marked_stamps_are_not_recounted(tmp_path, capsys):
+    from traust_engine.ledger import ALGO_VERSION, fingerprint
+
+    rep = _report_with_stamp("placeholder")
+    rep["findings"][0]["fingerprint"] = fingerprint(
+        rep["findings"][0], rep["metadata"]["repository"]
+    )
+    rep["findings"][0]["fingerprint_algo"] = ALGO_VERSION
+    (tmp_path / "a-security-audit.json").write_text(json.dumps(rep))
+
+    fi.run_attribute(tmp_path)
+    assert "1 already marked" in capsys.readouterr().out

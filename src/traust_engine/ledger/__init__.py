@@ -40,7 +40,9 @@ from traust_ledger.api.events import (
 
 # ─── SDK-tier: identity ─────────────────────────────────────────────────
 from traust_ledger.api.identity import (
+    ALGO_LADDER,
     ALGO_VERSION,
+    attribute,
     canon_path,
     canon_repo,
     fingerprint,
@@ -82,7 +84,9 @@ from traust_engine.ledger.service import (
 __all__ = [
     # Legacy (removed: stamp_and_sign — use LedgerService.sign())
     # Identity
+    "ALGO_LADDER",
     "ALGO_VERSION",
+    "attribute",
     # Events
     "FINGERPRINT_ALGO_CURRENT",
     # Integrity
