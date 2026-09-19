@@ -67,6 +67,14 @@ FAMILY_BY_REF: dict[str, dict[str, str]] = {
         "container-audit": "layer",
         "cloud-config": "layer",
     },
+    # Operator privilege profiles ride the same per-subject refs as the
+    # reports beside them. Same family regardless of report_kind: the
+    # profile describes shipped manifests, not the audit that found them.
+    "priv_profile": {
+        "code-audit": "operator-priv-profile",
+        "container-audit": "operator-priv-profile",
+        "cloud-config": "operator-priv-profile",
+    },
 }
 
 

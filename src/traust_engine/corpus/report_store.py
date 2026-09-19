@@ -209,6 +209,7 @@ ARTIFACT_FIELDS = (
     "findings_layer",
     "triage_json",
     "threat_model",
+    "priv_profile",
 )
 
 REPOS_COLUMNS = (
@@ -229,6 +230,7 @@ REPOS_COLUMNS = (
     "findings_layer",
     "triage_json",
     "threat_model",
+    "priv_profile",
     "preferred",
     "repo_url",
     "report_kind",

@@ -336,6 +336,7 @@ class ReportRecord:
     findings_layer: str | None
     triage_json: str | None
     threat_model: str | None
+    priv_profile: str | None
     preferred: str  # findings_current | audit_json | audit_md_only
     repo_url: str | None = None
     report_kind: str = "code-audit"  # code-audit | cloud-config | container-audit
@@ -563,6 +564,7 @@ def _record(
         findings_layer=_companion(dirpath, base, "-findings-layer.json"),
         triage_json=_companion(dirpath, base, "-triage.json"),
         threat_model=_companion(dirpath, base, "-threat-model.md"),
+        priv_profile=_companion(dirpath, base, "-priv-profile.json"),
         preferred=preferred,
         repo_url=repo_url,
         report_kind=report_kind,

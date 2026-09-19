@@ -100,7 +100,12 @@ if _unbucketed:  # pragma: no cover - fires only when the contract enum grows
 # 1 -> 2: v_open/v_hardening stopped being SELECT f.* and publish an explicit
 #         column list, and their disposition filters are derived from the
 #         contract enums (the dead 'withdrawn'/'refuted' values are gone).
-SCHEMA_REVISION = 2
+# 2 -> 3: repos gains priv_profile, the seventh per-record artifact ref.
+#         operator-priv-profile became a projectable contract artifact
+#         (contracts v0.17.0), and report_store rebuilds a ReportRecord from
+#         this table field-for-field -- so a reader on revision 2 cannot
+#         reconstruct the record at all.
+SCHEMA_REVISION = 3
 
 
 class StaleFindingsDb(RuntimeError):
@@ -208,7 +213,7 @@ CREATE TABLE repos (
   audit_date    TEXT,              -- report metadata.date (SLA clock
                                    -- fallback when a finding has no
                                    -- ledger events)
-  -- The six per-record artifact refs, root-relative rather than absolute.
+  -- The seven per-record artifact refs, root-relative rather than absolute.
   -- These are what corpus-manifest.json carried and this table did not, and
   -- they are the reason it can be retired (2026-08-20). Root-relative on
   -- purpose: an absolute path is meaningless once reports move out of the
@@ -219,7 +224,8 @@ CREATE TABLE repos (
   findings_current TEXT,
   findings_layer  TEXT,
   triage_json     TEXT,
-  threat_model    TEXT
+  threat_model    TEXT,
+  priv_profile    TEXT
 );
 
 CREATE TABLE findings (
@@ -412,7 +418,7 @@ def insert_record(cur, rec, results: Path, counts: dict):
         return to_ref(value, results)
 
     cur.execute(
-        "INSERT OR REPLACE INTO repos VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT OR REPLACE INTO repos VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             key,
             rec.tree,
@@ -439,6 +445,7 @@ def insert_record(cur, rec, results: Path, counts: dict):
             _ref(rec.findings_layer),
             _ref(rec.triage_json),
             _ref(rec.threat_model),
+            _ref(rec.priv_profile),
         ),
     )
     counts["repos"] += 1
