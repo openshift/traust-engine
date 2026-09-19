@@ -146,9 +146,12 @@ def build_registry(results: Path, cfg: CorpusConfig, trees: list[str] | None = N
     resolution = corpus.resolve(results, cfg, trees=trees, with_repo_urls=True)
     subjects = []
     for record in resolution.records:
-        if record.tree not in cfg.trees:
+        # tree_meta, not cfg.trees: a registered ENGAGEMENT tree is a
+        # first-class ownership carrier and resolver.active_trees() merges
+        # it in. Filtering on cfg.trees dropped 53 repos / 399 findings.
+        meta = cfg.tree_meta(record.tree)
+        if meta is None:
             continue
-        meta = cfg.trees[record.tree]
         subject: dict[str, Any] = {
             "subject_id": repo_key(record),
             "tree": record.tree,
