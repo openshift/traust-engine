@@ -462,42 +462,36 @@ def run_fingerprint(
 def run_backfill(root: Path, *, dry_run: bool = False, allow_identity_move: bool = False) -> int:
     """Re-stamp every audit report under `root`.
 
-    Refuses by default when any report would MOVE an existing identity.
-    The refusal is whole-run, not per-file: a partial backfill that stamped
-    half the corpus and stopped would be harder to reason about than one
-    that did nothing. Run with --dry-run first to see the scope.
+    Refuses the WHOLE run when any report would MOVE an existing identity,
+    and does so in a first pass BEFORE writing anything. A per-file skip
+    was the first attempt and it was wrong: it protected the risky report
+    and then wrote the other 399, leaving a corpus half re-stamped under a
+    decision nobody made. Verified against 400 real reports.
     """
-    seen = changed_files = findings = 0
+    reports: list[tuple[Path, dict]] = []
     blocked: list[tuple[Path, int]] = []
-    for p in sorted(root.rglob("*-security-audit.json")):
-        if "_manifest" in p.parts:
+    seen = 0
+
+    # Pass 1 — read and adjudicate. No writes.
+    for path in sorted(root.rglob("*-security-audit.json")):
+        if "_manifest" in path.parts:
             continue
         try:
-            rep = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as e:
-            print(f"skip {p}: {e}", file=sys.stderr)
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            print(f"skip {path}: {error}", file=sys.stderr)
             continue
         seen += 1
-        if not allow_identity_move and (moves := identity_moves(rep)):
-            blocked.append((p, len(moves)))
-            continue
-        n = annotate_report(rep, allow_identity_move=True)
-        findings += len(rep.get("findings") or [])
-        if n and not dry_run:
-            _persist_report(p, rep)
-        if n:
-            changed_files += 1
-    print(
-        f"backfill: {seen} reports scanned, {changed_files} "
-        f"{'updated' if not dry_run else 'would update'}, "
-        f"{findings} findings fingerprinted"
-    )
+        if not allow_identity_move and (moves := identity_moves(document)):
+            blocked.append((path, len(moves)))
+        reports.append((path, document))
+
     if blocked:
         total = sum(n for _, n in blocked)
         print(
-            f"backfill: REFUSED {len(blocked)} report(s) that would move "
-            f"{total} existing identit{'y' if total == 1 else 'ies'}. "
-            "Ledger events are keyed on those values. Re-run with "
+            f"backfill: REFUSED. {len(blocked)} of {seen} report(s) would move "
+            f"{total} existing identit{'y' if total == 1 else 'ies'}, so NOTHING "
+            "was written. Ledger events are keyed on those values. Re-run with "
             "--allow-identity-move only with a plan for the orphaned events.",
             file=sys.stderr,
         )
@@ -506,6 +500,21 @@ def run_backfill(root: Path, *, dry_run: bool = False, allow_identity_move: bool
         if len(blocked) > 10:
             print(f"  (+{len(blocked) - 10} more)", file=sys.stderr)
         return 1
+
+    # Pass 2 — write, now that the whole run is known to be safe.
+    changed_files = findings = 0
+    for path, document in reports:
+        n = annotate_report(document, allow_identity_move=True)
+        findings += len(document.get("findings") or [])
+        if n and not dry_run:
+            _persist_report(path, document)
+        if n:
+            changed_files += 1
+    print(
+        f"backfill: {seen} reports scanned, {changed_files} "
+        f"{'updated' if not dry_run else 'would update'}, "
+        f"{findings} findings fingerprinted"
+    )
     return 0
 
 

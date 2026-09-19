@@ -414,10 +414,15 @@ def test_backfill_refuses_the_whole_run_and_writes_nothing(tmp_path, capsys):
     risky.write_text(json.dumps(_stamped_report("f" * 64)))
     before = risky.read_text()
 
+    safe_before = safe.read_text()
     assert fi.run_backfill(tmp_path) == 1
     err = capsys.readouterr().err
-    assert "REFUSED" in err and "orphaned" in err
+    assert "REFUSED" in err and "NOTHING" in err
     assert risky.read_text() == before, "the risky report must be untouched"
+    # The one that matters: an earlier version skipped the risky file and
+    # wrote every OTHER report, leaving the corpus half re-stamped. This
+    # test passed anyway because it only checked the risky file.
+    assert safe.read_text() == safe_before, "a refused run must write NOTHING"
 
     assert fi.run_backfill(tmp_path, allow_identity_move=True) == 0
     assert json.loads(risky.read_text())["findings"][0]["fingerprint"] != "f" * 64
