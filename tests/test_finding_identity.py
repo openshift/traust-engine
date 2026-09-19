@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from traust_engine._util import finding_identity as fi
 from traust_engine.ledger import LedgerService
 
@@ -360,3 +362,91 @@ def test_annotated_report_still_validates_against_the_contract():
     jsonschema.Draft202012Validator({"$ref": "#/$defs/finding", "$defs": schema["$defs"]}).validate(
         rep["findings"][0]
     )
+
+
+def _stamped_report(fingerprint_value: str) -> dict:
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    rep["findings"][0]["fingerprint"] = fingerprint_value
+    return rep
+
+
+def test_identity_moves_reports_only_real_moves():
+    """Stamping an UNSTAMPED finding is not a move -- nothing referenced it."""
+    fresh = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    assert fi.identity_moves(fresh) == []
+
+    fi.annotate_report(fresh)
+    assert fi.identity_moves(fresh) == [], "idempotent re-stamp is not a move"
+
+    moved = _stamped_report("f" * 64)
+    assert [m[0] for m in fi.identity_moves(moved)] == ["F-1"]
+
+
+def test_annotate_refuses_to_move_an_existing_identity_when_asked():
+    """Ledger events are keyed on the fingerprint, so a move orphans them."""
+    rep = _stamped_report("f" * 64)
+    with pytest.raises(fi.IdentityMoved, match="orphans that history"):
+        fi.annotate_report(rep, allow_identity_move=False)
+    assert rep["findings"][0]["fingerprint"] == "f" * 64, "must not mutate before refusing"
+
+    assert fi.annotate_report(rep, allow_identity_move=True) >= 1
+    assert rep["findings"][0]["fingerprint"] != "f" * 64
+
+
+def test_backfill_refuses_the_whole_run_and_writes_nothing(tmp_path, capsys):
+    """Whole-run refusal: a half-stamped corpus is worse than an untouched one."""
+    safe = tmp_path / "a-security-audit.json"
+    risky = tmp_path / "b-security-audit.json"
+    safe.write_text(
+        json.dumps(
+            {
+                "metadata": {"repository": "https://example.test/repo"},
+                "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+            }
+        )
+    )
+    risky.write_text(json.dumps(_stamped_report("f" * 64)))
+    before = risky.read_text()
+
+    assert fi.run_backfill(tmp_path) == 1
+    err = capsys.readouterr().err
+    assert "REFUSED" in err and "orphaned" in err
+    assert risky.read_text() == before, "the risky report must be untouched"
+
+    assert fi.run_backfill(tmp_path, allow_identity_move=True) == 0
+    assert json.loads(risky.read_text())["findings"][0]["fingerprint"] != "f" * 64
+
+
+def test_backfill_still_stamps_when_nothing_would_move(tmp_path):
+    report = tmp_path / "a-security-audit.json"
+    report.write_text(
+        json.dumps(
+            {
+                "metadata": {"repository": "https://example.test/repo"},
+                "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+            }
+        )
+    )
+    assert fi.run_backfill(tmp_path) == 0
+    stamped = json.loads(report.read_text())["findings"][0]
+    assert len(stamped["fingerprint"]) == 64 and stamped["fingerprint_algo"]
+
+
+def test_run_fingerprint_only_guards_the_writing_path(tmp_path, capsys):
+    """Read-only inspection must still show what WOULD change."""
+    report = tmp_path / "x-security-audit.json"
+    report.write_text(json.dumps(_stamped_report("f" * 64)))
+    before = report.read_text()
+
+    assert fi.run_fingerprint(report) == 0, "preview must not refuse"
+    assert report.read_text() == before
+
+    assert fi.run_fingerprint(report, write=True) == 1
+    assert "orphans that history" in capsys.readouterr().err
+    assert report.read_text() == before, "refused write must leave the file alone"

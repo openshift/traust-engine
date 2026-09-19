@@ -117,13 +117,65 @@ def normalize_repository(raw):
     return s or raw
 
 
-def annotate_report(report: dict) -> int:
+class IdentityMoved(RuntimeError):
+    """Re-stamping would change an identity that already exists.
+
+    A fingerprint is the cross-scan correlation key: ledger events are
+    written against it, so moving one orphans that finding's history. A
+    bulk re-stamp can do this thousands of times in a second and leave no
+    trace, which is why the bulk paths refuse by default rather than warn.
+
+    Measured 2026-09-18: re-stamping the corpus today would move ~11% of
+    findings, because stamps minted under identity ALGO_VERSION v2 hash
+    differently under v3 (primary_cwe moved from first-listed to
+    lowest-numbered on 2026-09-02).
+    """
+
+    def __init__(self, moves: list[tuple[str, str, str]]) -> None:
+        self.moves = moves
+        shown = ", ".join(f"{fid} {old[:8]}->{new[:8]}" for fid, old, new in moves[:3])
+        more = f" (+{len(moves) - 3} more)" if len(moves) > 3 else ""
+        super().__init__(
+            f"refusing to move {len(moves)} existing finding identit"
+            f"{'y' if len(moves) == 1 else 'ies'}: {shown}{more}. "
+            "Ledger events are keyed on these values, so moving them orphans "
+            "that history. Pass allow_identity_move=True (CLI: "
+            "--allow-identity-move) only with a plan for the orphaned events."
+        )
+
+
+def identity_moves(report: dict) -> list[tuple[str, str, str]]:
+    """Which already-stamped findings would get a DIFFERENT hash. Pure.
+
+    Only counts a move where a stamp already exists and differs. Stamping a
+    previously unstamped finding is not a move -- nothing referenced it.
+    """
+    repo = normalize_repository((report.get("metadata") or {}).get("repository"))
+    moves = []
+    for f in report.get("findings") or []:
+        old = f.get("fingerprint")
+        if not old:
+            continue
+        new = fingerprint(f, repo)
+        if new != old:
+            moves.append((str(f.get("id")), old, new))
+    return moves
+
+
+def annotate_report(report: dict, *, allow_identity_move: bool = True) -> int:
     """Set/refresh `fingerprint` on every finding. Returns count changed.
+
+    `allow_identity_move=False` refuses when an EXISTING stamp would change
+    value -- see `IdentityMoved`. The default is permissive because the
+    audit-time writers call this on freshly-authored reports where nothing
+    is stamped yet; the bulk re-stamp paths below invert it.
 
     Normalizes `metadata.repository` first (see `normalize_repository`) so a
     transcription artefact cannot survive long enough to be hashed into a
     finding's identity. Also infers `metadata.audit_profile` when absent (rpm
     when any finding carries an RPM01-RPM10 category, else code)."""
+    if not allow_identity_move and (moves := identity_moves(report)):
+        raise IdentityMoved(moves)
     md0 = report.setdefault("metadata", {})
     raw_repo = md0.get("repository")
     changed = 0
@@ -390,9 +442,15 @@ def _persist_report(report_path: Path, report: dict) -> None:
     report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
 
 
-def run_fingerprint(report_path: Path, *, write: bool = False) -> int:
+def run_fingerprint(
+    report_path: Path, *, write: bool = False, allow_identity_move: bool = False
+) -> int:
     rep = json.loads(report_path.read_text(encoding="utf-8"))
-    n = annotate_report(rep)
+    try:
+        n = annotate_report(rep, allow_identity_move=allow_identity_move or not write)
+    except IdentityMoved as error:
+        print(f"{report_path}: {error}", file=sys.stderr)
+        return 1
     if write and n:
         _persist_report(report_path, rep)
     for f in rep.get("findings") or []:
@@ -401,8 +459,16 @@ def run_fingerprint(report_path: Path, *, write: bool = False) -> int:
     return 0
 
 
-def run_backfill(root: Path, *, dry_run: bool = False) -> int:
+def run_backfill(root: Path, *, dry_run: bool = False, allow_identity_move: bool = False) -> int:
+    """Re-stamp every audit report under `root`.
+
+    Refuses by default when any report would MOVE an existing identity.
+    The refusal is whole-run, not per-file: a partial backfill that stamped
+    half the corpus and stopped would be harder to reason about than one
+    that did nothing. Run with --dry-run first to see the scope.
+    """
     seen = changed_files = findings = 0
+    blocked: list[tuple[Path, int]] = []
     for p in sorted(root.rglob("*-security-audit.json")):
         if "_manifest" in p.parts:
             continue
@@ -412,7 +478,10 @@ def run_backfill(root: Path, *, dry_run: bool = False) -> int:
             print(f"skip {p}: {e}", file=sys.stderr)
             continue
         seen += 1
-        n = annotate_report(rep)
+        if not allow_identity_move and (moves := identity_moves(rep)):
+            blocked.append((p, len(moves)))
+            continue
+        n = annotate_report(rep, allow_identity_move=True)
         findings += len(rep.get("findings") or [])
         if n and not dry_run:
             _persist_report(p, rep)
@@ -423,6 +492,20 @@ def run_backfill(root: Path, *, dry_run: bool = False) -> int:
         f"{'updated' if not dry_run else 'would update'}, "
         f"{findings} findings fingerprinted"
     )
+    if blocked:
+        total = sum(n for _, n in blocked)
+        print(
+            f"backfill: REFUSED {len(blocked)} report(s) that would move "
+            f"{total} existing identit{'y' if total == 1 else 'ies'}. "
+            "Ledger events are keyed on those values. Re-run with "
+            "--allow-identity-move only with a plan for the orphaned events.",
+            file=sys.stderr,
+        )
+        for path, n in blocked[:10]:
+            print(f"  {path}: {n}", file=sys.stderr)
+        if len(blocked) > 10:
+            print(f"  (+{len(blocked) - 10} more)", file=sys.stderr)
+        return 1
     return 0
 
 
