@@ -293,3 +293,70 @@ def test_confine_layer_path_catches_a_symlink_out_of_the_tree(tmp_path):
     real = root / "real-layer.json"
     real.write_text("{}")
     assert confine_layer_path(real, [root]) == real.resolve()
+
+
+def test_annotate_report_stamps_the_algorithm_version():
+    """A bare hash cannot say which recipe minted it.
+
+    The ledger's event writer has always recorded fingerprint_algo; the
+    report writer did not, so 25,515 corpus findings carry a hash and
+    nothing else. Answering "v2 or v3?" then means brute-forcing every
+    known recipe, which works only while there are two.
+    """
+    from traust_engine.ledger import ALGO_VERSION
+
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    fi.annotate_report(rep)
+    finding = rep["findings"][0]
+    assert finding["fingerprint_algo"] == ALGO_VERSION
+    assert len(finding["fingerprint"]) == 64
+
+
+def test_a_stale_algo_stamp_is_refreshed_even_when_the_hash_matches():
+    """The hash and the version must not be able to disagree.
+
+    Checking only the hash would leave a v2 marker sitting on a value the
+    current recipe produced -- worse than no marker, because it reads as
+    authoritative.
+    """
+    from traust_engine.ledger import ALGO_VERSION
+
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [_finding("F-1", "a/b.go", "CWE-79", "one")],
+    }
+    fi.annotate_report(rep)
+    rep["findings"][0]["fingerprint_algo"] = "v1"  # hash still correct
+    assert fi.annotate_report(rep) == 1
+    assert rep["findings"][0]["fingerprint_algo"] == ALGO_VERSION
+
+
+def test_annotated_report_still_validates_against_the_contract():
+    """additionalProperties is false on $defs/finding, so the writer and the
+    schema have to move together."""
+    import jsonschema
+    from traust_contracts.paths import schema_dir
+
+    schema = json.loads((schema_dir() / "report.schema.json").read_text())
+    rep = {
+        "metadata": {"repository": "https://example.test/repo"},
+        "findings": [
+            {
+                "id": "REPO-abcdef0-001",
+                "title": "A sufficiently descriptive finding title",
+                "severity": "high",
+                "description": "d" * 50,
+                "cwes": ["CWE-79"],
+                "locations": [{"path": "a/b.go"}],
+                "remediation": "r" * 20,
+            }
+        ],
+    }
+    fi.annotate_report(rep)
+    # Carry $defs so the finding's internal $refs resolve.
+    jsonschema.Draft202012Validator({"$ref": "#/$defs/finding", "$defs": schema["$defs"]}).validate(
+        rep["findings"][0]
+    )

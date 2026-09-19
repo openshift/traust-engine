@@ -89,6 +89,7 @@ from pathlib import Path
 
 from traust_engine._util.layer_paths import confine_layer_path
 from traust_engine.ledger import (
+    ALGO_VERSION,
     canon_path,
     fingerprint,
     primary_cwe,
@@ -134,8 +135,15 @@ def annotate_report(report: dict) -> int:
     repo = md0.get("repository")
     for f in report.get("findings") or []:
         fp = fingerprint(f, repo)
-        if f.get("fingerprint") != fp:
+        # Stamp the recipe version alongside the hash. The ledger's event
+        # writer has always done this (events/_core.py); the report writer
+        # did not, so 25,515 corpus findings carry a bare hash and nothing
+        # says which recipe minted it. They were separable only because
+        # exactly two recipes existed to try -- a third makes that
+        # combinatorial and a cross-version collision undetectable.
+        if f.get("fingerprint") != fp or f.get("fingerprint_algo") != ALGO_VERSION:
             f["fingerprint"] = fp
+            f["fingerprint_algo"] = ALGO_VERSION
             changed += 1
     md = report.setdefault("metadata", {})
     if "audit_profile" not in md:
